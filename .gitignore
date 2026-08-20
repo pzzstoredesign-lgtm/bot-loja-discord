@@ -1,0 +1,13 @@
+# Segredos — NUNCA subir para o GitHub
+.env
+
+# Banco de dados local do bot
+bot.db
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
