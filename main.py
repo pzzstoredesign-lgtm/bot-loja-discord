@@ -38,6 +38,7 @@ COGS = (
     "cogs.welcome",
     "cogs.custom_commands",
     "cogs.store",
+    "cogs.arquivo",
 )
 
 
