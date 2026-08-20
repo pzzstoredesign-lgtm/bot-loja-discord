@@ -9,8 +9,10 @@ Comandos que já mandam o conteúdo formatado para o canal certo:
     /ideia     -> ・ideias
     /diario    -> ・diario
 
-Além disso, todo dia às 08:00 (horário de São Paulo) o bot posta
-automaticamente o cabeçalho da data no ・diario.
+Todo dia às 00:00 (horário de São Paulo) o bot monta automaticamente um
+resumo do dia que terminou — lista os trabalhos enviados em ・trabalhos e
+conta prompts/ideias/links/ias — e posta no ・diario com a data.
+O comando /resumo gera esse mesmo resumo na hora (para o dia atual).
 """
 
 import datetime
@@ -109,21 +111,98 @@ class Arquivo(commands.Cog):
         embed.set_footer(text=f"ideia · {hoje_str()}")
         await self._enviar(interaction, "・ideias", embed)
 
-    @app_commands.command(description="Registra uma entrada no ・diario.")
+    @app_commands.command(description="Registra uma entrada manual no ・diario.")
     @app_commands.describe(texto="O que rolou hoje")
     async def diario(self, interaction: discord.Interaction, texto: str):
         embed = discord.Embed(title=hoje_str(), description=texto, color=RED)
         embed.set_footer(text="diário")
         await self._enviar(interaction, "・diario", embed)
 
+    @app_commands.command(description="Gera agora o resumo do dia e posta no ・diario.")
+    @app_commands.checks.has_permissions(manage_guild=True)
+    async def resumo(self, interaction: discord.Interaction):
+        await interaction.response.defer(ephemeral=True)
+        diario = canal(interaction.guild, "・diario")
+        if diario is None:
+            await interaction.followup.send("❌ não encontrei o canal `・diario`.", ephemeral=True)
+            return
+        agora = datetime.datetime.now(TZ)
+        inicio = agora.replace(hour=0, minute=0, second=0, microsecond=0)
+        embed = await self._montar_resumo(interaction.guild, inicio, agora, inicio)
+        await diario.send(embed=embed)
+        await interaction.followup.send(f"✅ resumo do dia postado em {diario.mention}", ephemeral=True)
+
     # ------------------------------------------------------------------ #
-    @tasks.loop(time=datetime.time(hour=8, minute=0, tzinfo=TZ))
+    # Resumo automático do dia
+    # ------------------------------------------------------------------ #
+    async def _contar(self, ch, inicio, fim) -> int:
+        if ch is None:
+            return 0
+        n = 0
+        async for _ in ch.history(after=inicio, before=fim, limit=None):
+            n += 1
+        return n
+
+    async def _listar_trabalhos(self, ch, inicio, fim):
+        itens = []
+        if ch is None:
+            return itens
+        async for msg in ch.history(after=inicio, before=fim, limit=None, oldest_first=True):
+            titulo, desc = None, ""
+            if msg.embeds:
+                em = msg.embeds[0]
+                titulo = em.title
+                desc = em.description or ""
+            if not titulo:
+                primeira = (msg.content or "").strip().split("\n")[0]
+                titulo = primeira[:80] if primeira else "(sem título)"
+            itens.append((titulo, desc))
+        return itens
+
+    async def _montar_resumo(self, guild, inicio, fim, data_label) -> discord.Embed:
+        trabalhos = await self._listar_trabalhos(canal(guild, "・trabalhos"), inicio, fim)
+        n_prompts = await self._contar(canal(guild, "・prompts"), inicio, fim)
+        n_ideias = await self._contar(canal(guild, "・ideias"), inicio, fim)
+        n_links = await self._contar(canal(guild, "・links"), inicio, fim)
+        n_ias = await self._contar(canal(guild, "・ias"), inicio, fim)
+
+        titulo = f"📓 {data_label.strftime('%d/%m/%Y')} · {DIAS[data_label.weekday()]}"
+        tally = (f"🗂️ {len(trabalhos)} trabalhos · 🧠 {n_prompts} prompts · "
+                 f"💡 {n_ideias} ideias · 🔗 {n_links} links · 🤖 {n_ias} ias")
+        embed = discord.Embed(title=titulo, description=tally, color=RED)
+
+        if trabalhos:
+            linhas, total = [], 0
+            for i, (t, d) in enumerate(trabalhos, 1):
+                linha = f"**{i}.** {t}"
+                if d:
+                    d1 = " ".join(d.split())
+                    if len(d1) > 80:
+                        d1 = d1[:77] + "…"
+                    linha += f" — {d1}"
+                if total + len(linha) + 1 > 1000:
+                    linhas.append(f"… +{len(trabalhos) - i + 1} mais")
+                    break
+                linhas.append(linha)
+                total += len(linha) + 1
+            corpo = "\n".join(linhas)
+        else:
+            corpo = "nenhum trabalho enviado."
+        embed.add_field(name="trabalhos do dia", value=corpo, inline=False)
+        embed.set_footer(text="resumo automático · 彼岸花")
+        return embed
+
+    @tasks.loop(time=datetime.time(hour=0, minute=0, tzinfo=TZ))
     async def diario_automatico(self):
+        agora = datetime.datetime.now(TZ)
+        fim = agora.replace(hour=0, minute=0, second=0, microsecond=0)
+        inicio = fim - datetime.timedelta(days=1)
         for guild in self.bot.guilds:
-            ch = canal(guild, "・diario")
-            if ch:
-                embed = discord.Embed(title=f"— {hoje_str()} —", color=RED)
-                await ch.send(embed=embed)
+            diario = canal(guild, "・diario")
+            if diario is None:
+                continue
+            embed = await self._montar_resumo(guild, inicio, fim, inicio)
+            await diario.send(embed=embed)
 
     @diario_automatico.before_loop
     async def _before(self):
