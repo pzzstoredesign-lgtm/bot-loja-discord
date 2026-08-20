@@ -7,12 +7,15 @@ Comandos que já mandam o conteúdo formatado para o canal certo:
     /ia        -> ・ias
     /link      -> ・links
     /ideia     -> ・ideias
-    /diario    -> ・diario
+    /diario    -> ・diario    (aceita anexar imagem/arquivo)
+    /resumo    -> gera o resumo do dia na hora
 
 Todo dia às 00:00 (horário de São Paulo) o bot monta automaticamente um
 resumo do dia que terminou — lista os trabalhos enviados em ・trabalhos e
 conta prompts/ideias/links/ias — e posta no ・diario com a data.
-O comando /resumo gera esse mesmo resumo na hora (para o dia atual).
+
+Obs.: todos os comandos usam defer() primeiro, para nunca estourar o limite
+de 3 segundos do Discord (evita o erro "A interação falhou").
 """
 
 import datetime
@@ -49,16 +52,17 @@ class Arquivo(commands.Cog):
 
     async def _enviar(self, interaction: discord.Interaction, nome_canal: str,
                       embed: discord.Embed, file: discord.File | None = None):
+        """Posta no canal e responde por followup (a interação já foi 'deferida')."""
         ch = canal(interaction.guild, nome_canal)
         if ch is None:
-            await interaction.response.send_message(
+            await interaction.followup.send(
                 f"❌ não encontrei o canal `{nome_canal}`.", ephemeral=True)
             return
         if file is not None:
             await ch.send(embed=embed, file=file)
         else:
             await ch.send(embed=embed)
-        await interaction.response.send_message(f"✅ enviado para {ch.mention}", ephemeral=True)
+        await interaction.followup.send(f"✅ enviado para {ch.mention}", ephemeral=True)
 
     # ------------------------------------------------------------------ #
     @app_commands.command(description="Envia um projeto/trabalho para ・trabalhos (aceita arquivo).")
@@ -66,6 +70,7 @@ class Arquivo(commands.Cog):
                            arquivo="Arquivo do trabalho (opcional)")
     async def trabalho(self, interaction: discord.Interaction, titulo: str,
                        descricao: str = "", arquivo: discord.Attachment = None):
+        await interaction.response.defer(ephemeral=True)
         embed = discord.Embed(title=titulo, description=descricao or None, color=RED)
         embed.set_author(name=interaction.user.display_name,
                          icon_url=interaction.user.display_avatar.url)
@@ -81,6 +86,7 @@ class Arquivo(commands.Cog):
     @app_commands.describe(titulo="Nome do prompt", conteudo="O prompt completo", tags="Tags (opcional)")
     async def prompt(self, interaction: discord.Interaction, titulo: str,
                      conteudo: str, tags: str = ""):
+        await interaction.response.defer(ephemeral=True)
         embed = discord.Embed(title=titulo, description=f"```\n{conteudo[:3900]}\n```", color=RED)
         if tags:
             embed.add_field(name="tags", value=tags, inline=False)
@@ -90,6 +96,7 @@ class Arquivo(commands.Cog):
     @app_commands.command(description="Registra uma ferramenta de IA em ・ias.")
     @app_commands.describe(nome="Nome da IA", uso="Pra que você usa", link="Link (opcional)")
     async def ia(self, interaction: discord.Interaction, nome: str, uso: str = "", link: str = ""):
+        await interaction.response.defer(ephemeral=True)
         desc = uso
         if link:
             desc = (desc + "\n" if desc else "") + link
@@ -100,6 +107,7 @@ class Arquivo(commands.Cog):
     @app_commands.command(description="Salva um link em ・links.")
     @app_commands.describe(url="O link", nota="Nota curta (opcional)")
     async def link(self, interaction: discord.Interaction, url: str, nota: str = ""):
+        await interaction.response.defer(ephemeral=True)
         embed = discord.Embed(description=f"[{nota or url}]({url})", color=RED)
         embed.set_footer(text=f"link · {hoje_str()}")
         await self._enviar(interaction, "・links", embed)
@@ -107,16 +115,24 @@ class Arquivo(commands.Cog):
     @app_commands.command(description="Anota uma ideia em ・ideias.")
     @app_commands.describe(texto="A ideia")
     async def ideia(self, interaction: discord.Interaction, texto: str):
+        await interaction.response.defer(ephemeral=True)
         embed = discord.Embed(description=texto, color=RED)
         embed.set_footer(text=f"ideia · {hoje_str()}")
         await self._enviar(interaction, "・ideias", embed)
 
-    @app_commands.command(description="Registra uma entrada manual no ・diario.")
-    @app_commands.describe(texto="O que rolou hoje")
-    async def diario(self, interaction: discord.Interaction, texto: str):
+    @app_commands.command(description="Registra uma entrada no ・diario (aceita imagem/arquivo).")
+    @app_commands.describe(texto="O que rolou hoje", anexo="Imagem ou arquivo (opcional)")
+    async def diario(self, interaction: discord.Interaction, texto: str,
+                     anexo: discord.Attachment = None):
+        await interaction.response.defer(ephemeral=True)
         embed = discord.Embed(title=hoje_str(), description=texto, color=RED)
         embed.set_footer(text="diário")
-        await self._enviar(interaction, "・diario", embed)
+        f = None
+        if anexo is not None:
+            f = await anexo.to_file()
+            if anexo.content_type and anexo.content_type.startswith("image"):
+                embed.set_image(url=f"attachment://{f.filename}")
+        await self._enviar(interaction, "・diario", embed, f)
 
     @app_commands.command(description="Gera agora o resumo do dia e posta no ・diario.")
     @app_commands.checks.has_permissions(manage_guild=True)
@@ -207,6 +223,17 @@ class Arquivo(commands.Cog):
     @diario_automatico.before_loop
     async def _before(self):
         await self.bot.wait_until_ready()
+
+    # ------------------------------------------------------------------ #
+    async def cog_app_command_error(self, interaction: discord.Interaction, error):
+        msg = f"⚠️ deu um erro: `{error}`"
+        try:
+            if interaction.response.is_done():
+                await interaction.followup.send(msg, ephemeral=True)
+            else:
+                await interaction.response.send_message(msg, ephemeral=True)
+        except Exception:
+            pass
 
 
 async def setup(bot: commands.Bot):
