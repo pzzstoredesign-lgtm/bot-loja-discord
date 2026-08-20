@@ -64,11 +64,7 @@ class StoreBot(commands.Bot):
 
     async def on_ready(self):
         log.info("Conectado como %s (ID: %s)", self.user, self.user.id)
-        await self.change_presence(
-            activity=discord.Activity(
-                type=discord.ActivityType.watching, name="a loja abrir 🛍️"
-            )
-        )
+        await self.change_presence(activity=discord.CustomActivity(name="leviticus"))
 
 
 def main():
