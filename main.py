@@ -39,6 +39,7 @@ COGS = (
     "cogs.custom_commands",
     "cogs.store",
     "cogs.arquivo",
+    "cogs.agenda",
 )
 
 
