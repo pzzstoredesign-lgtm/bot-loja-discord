@@ -27,19 +27,19 @@ HHMM = re.compile(r"^([01]?\d|2[0-3]):[0-5]\d$")
 
 # Rotina fixa para uma vida saudável (a partir das 12:15)
 ROTINA = [
-    ("12:15", "🍽️", "hora de almoçar — sai do PC pra comer"),
-    ("13:00", "🎨", "trabalhar na PZZ Store design"),
-    ("14:30", "🧍", "pausa: levanta, alonga, sai do PC uns 5 min"),
-    ("14:45", "🛒", "trabalhar no TikTok Shop — ofertas e vídeos"),
-    ("16:00", "🐶", "brincar com a cachorra"),
-    ("16:20", "💰", "trabalhar nas contas monetizadas"),
-    ("17:45", "🏋️", "exercício / treino"),
-    ("18:45", "🍎", "lanche — come algo leve"),
-    ("19:15", "🎨", "voltar pra PZZ Store design"),
-    ("20:45", "🚶", "pausa longa: sai do PC e respira"),
-    ("21:15", "🍽️", "jantar"),
-    ("22:00", "🐶", "tempo com a cachorra e relaxar"),
-    ("23:00", "😴", "desligar as telas e descansar"),
+    ("12:15", "食", "hora de almoçar — sai do PC pra comer"),
+    ("13:00", "絵", "trabalhar na PZZ Store design"),
+    ("14:30", "休", "pausa: levanta, alonga, sai do PC uns 5 min"),
+    ("14:45", "商", "trabalhar no TikTok Shop — ofertas e vídeos"),
+    ("16:00", "犬", "brincar com a cachorra"),
+    ("16:20", "金", "trabalhar nas contas monetizadas"),
+    ("17:45", "運", "exercício / treino"),
+    ("18:45", "食", "lanche — come algo leve"),
+    ("19:15", "絵", "voltar pra PZZ Store design"),
+    ("20:45", "休", "pausa longa: sai do PC e respira"),
+    ("21:15", "食", "jantar"),
+    ("22:00", "犬", "tempo com a cachorra e relaxar"),
+    ("23:00", "眠", "desligar as telas e descansar"),
 ]
 
 
@@ -92,14 +92,14 @@ class Agenda(commands.Cog):
                     key = f"{guild.id}|{hora}|{texto}"
                     if self._fired.get(key) != hoje:
                         self._fired[key] = hoje
-                        await ch.send(f"⏰ {mention} — **{hora}** · {emoji} {texto}")
+                        await ch.send(f"時 {mention} — **{hora}** · {emoji} {texto}")
             # compromissos personalizados
             for it in self.custom.get(guild.id, []):
                 if it["hora"] == hhmm:
                     key = f"{guild.id}|{it['hora']}|{it['texto']}"
                     if self._fired.get(key) != hoje:
                         self._fired[key] = hoje
-                        await ch.send(f"⏰ {mention} — **{it['hora']}** · {it['texto']}")
+                        await ch.send(f"時 {mention} — **{it['hora']}** · {it['texto']}")
 
     @tick.before_loop
     async def _before(self):
@@ -114,7 +114,7 @@ class Agenda(commands.Cog):
     async def ver(self, interaction: discord.Interaction):
         await interaction.response.defer(ephemeral=True)
         linhas = [f"`{h}` {e} {t}" for h, e, t in ROTINA]
-        embed = discord.Embed(title="🗓️ rotina do dia", description="\n".join(linhas), color=RED)
+        embed = discord.Embed(title="予定 ﹒ rotina do dia", description="\n".join(linhas), color=RED)
         extras = self.custom.get(interaction.guild_id, [])
         if extras:
             extras_ord = sorted(extras, key=lambda x: x["hora"])
