@@ -1,0 +1,4 @@
+# Instala o FFmpeg no container do Railway (necessário para tocar áudio).
+# O "..." mantém os pacotes que o nixpacks já detecta (Python etc.) e adiciona o ffmpeg.
+[phases.setup]
+nixPkgs = ["...", "ffmpeg"]

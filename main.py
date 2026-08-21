@@ -40,6 +40,7 @@ COGS = (
     "cogs.store",
     "cogs.arquivo",
     "cogs.agenda",
+    "cogs.musica",
 )
 
 
