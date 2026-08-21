@@ -8,12 +8,15 @@ Comandos:
     /musica pausar / retomar
     /musica parar                  -> para tudo e sai da call
 
-Spotify: precisa das variáveis SPOTIFY_CLIENT_ID e SPOTIFY_CLIENT_SECRET no Railway
-(o YouTube funciona sem nada disso).
+Spotify: funciona sem API/credencial e sem premium — lê os nomes das faixas da
+página pública do Spotify e toca o equivalente do YouTube (só playlists públicas).
 """
 
 import asyncio
+import json
 import os
+import re
+import urllib.request
 
 import discord
 from discord import app_commands
@@ -34,9 +37,6 @@ YDL = yt_dlp.YoutubeDL({
 FFMPEG_BEFORE = "-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5"
 FFMPEG_OPTS = "-vn"
 
-SPOTIFY_ID = os.getenv("SPOTIFY_CLIENT_ID")
-SPOTIFY_SECRET = os.getenv("SPOTIFY_CLIENT_SECRET")
-
 
 def _extract(query: str) -> dict:
     info = YDL.extract_info(query, download=False)
@@ -48,24 +48,32 @@ def _extract(query: str) -> dict:
 
 
 def _spotify_queries(url: str):
-    import spotipy
-    from spotipy.oauth2 import SpotifyClientCredentials
-    sp = spotipy.Spotify(auth_manager=SpotifyClientCredentials(
-        client_id=SPOTIFY_ID, client_secret=SPOTIFY_SECRET))
+    """Lê os nomes das músicas de um link público do Spotify SEM API/credencial,
+    usando a página de embed pública (props __NEXT_DATA__). Só playlists/álbuns/faixas públicos."""
+    m = re.search(r"(track|playlist|album)[/:]([A-Za-z0-9]+)", url)
+    if not m:
+        return []
+    kind, sid = m.group(1), m.group(2)
+    embed = f"https://open.spotify.com/embed/{kind}/{sid}"
+    req = urllib.request.Request(embed, headers={"User-Agent": "Mozilla/5.0"})
+    html = urllib.request.urlopen(req, timeout=15).read().decode("utf-8", "ignore")
+    mj = re.search(r'<script id="__NEXT_DATA__"[^>]*>(.*?)</script>', html, re.S)
+    if not mj:
+        return []
+    entity = json.loads(mj.group(1))["props"]["pageProps"]["state"]["data"]["entity"]
     q = []
-    if "track" in url:
-        t = sp.track(url)
-        q.append(f"{t['artists'][0]['name']} - {t['name']}")
-    elif "playlist" in url:
-        res = sp.playlist_items(url, limit=50)
-        for it in res["items"]:
-            t = it.get("track")
-            if t:
-                q.append(f"{t['artists'][0]['name']} - {t['name']}")
-    elif "album" in url:
-        res = sp.album_tracks(url, limit=50)
-        for t in res["items"]:
-            q.append(f"{t['artists'][0]['name']} - {t['name']}")
+    tracks = entity.get("trackList") or []
+    if tracks:
+        for t in tracks:
+            title = (t.get("title") or "").strip()
+            artist = (t.get("subtitle") or "").strip()
+            if title:
+                q.append(f"{artist} - {title}".strip(" -"))
+    else:
+        title = (entity.get("title") or "").strip()
+        artist = (entity.get("subtitle") or "").strip()
+        if title:
+            q.append(f"{artist} - {title}".strip(" -"))
     return q
 
 
@@ -145,18 +153,14 @@ class Musica(commands.Cog):
             return await interaction.followup.send(f"❌ não consegui entrar na call: `{e}`")
 
         is_spotify = "spotify.com" in busca or "spotify:" in busca
-        if is_spotify and not (SPOTIFY_ID and SPOTIFY_SECRET):
-            return await interaction.followup.send(
-                "❌ pra Spotify, adicione `SPOTIFY_CLIENT_ID` e `SPOTIFY_CLIENT_SECRET` "
-                "nas variáveis do Railway. (YouTube funciona sem isso.)")
-
         if is_spotify:
             try:
                 queries = await self.bot.loop.run_in_executor(None, _spotify_queries, busca)
             except Exception as e:
-                return await interaction.followup.send(f"❌ erro no Spotify: `{e}`")
+                return await interaction.followup.send(f"❌ erro ao ler o Spotify: `{e}`")
             if not queries:
-                return await interaction.followup.send("❌ não achei músicas nesse link do Spotify.")
+                return await interaction.followup.send(
+                    "❌ não achei músicas nesse link (a playlist precisa ser **pública**).")
         else:
             queries = [busca]
 
