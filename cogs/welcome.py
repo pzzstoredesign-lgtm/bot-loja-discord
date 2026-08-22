@@ -25,6 +25,14 @@ class Welcome(commands.Cog):
     async def on_member_join(self, member: discord.Member):
         cfg = database.get_config(member.guild.id)
 
+        # Auto-cargo fixo: "famille" (círculo íntimo) — sempre, sem depender do banco
+        famille = discord.utils.get(member.guild.roles, name="famille")
+        if famille:
+            try:
+                await member.add_roles(famille, reason="Auto-cargo famille")
+            except discord.Forbidden:
+                pass
+
         # Auto-cargo
         if cfg["autorole_id"]:
             role = member.guild.get_role(cfg["autorole_id"])
