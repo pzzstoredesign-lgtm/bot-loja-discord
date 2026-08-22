@@ -25,7 +25,7 @@ import discord
 from discord import app_commands
 from discord.ext import commands, tasks
 
-RED = 0xE11228
+RED = 0xFFFFFF
 TZ = ZoneInfo("America/Sao_Paulo")
 DIAS = ["segunda", "terça", "quarta", "quinta", "sexta", "sábado", "domingo"]
 

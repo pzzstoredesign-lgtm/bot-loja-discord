@@ -20,7 +20,7 @@ import discord
 from discord import app_commands
 from discord.ext import commands, tasks
 
-RED = 0xE11228
+RED = 0xFFFFFF
 TZ = ZoneInfo("America/Sao_Paulo")
 CANAL = "・agenda"
 HHMM = re.compile(r"^([01]?\d|2[0-3]):[0-5]\d$")
